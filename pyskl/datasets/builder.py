@@ -18,11 +18,16 @@ if platform.system() != 'Windows':
     hard_limit = rlimit[1]
     soft_limit = min(4096, hard_limit)
     resource.setrlimit(resource.RLIMIT_NOFILE, (soft_limit, hard_limit))
-
+    
+# 管理所有数据集类的注册
 DATASETS = Registry('dataset')
+# 管理数据预处理流水线的注册
 PIPELINES = Registry('pipeline')
 
+#Registry机制: 基于MMCV的注册系统，支持动态添加和查找组件
 
+# PySKL 框架中数据集构建的核心组件，负责数据集的注册、构建和数据加载器的创建。
+# 它实现了工厂模式和注册机制，是数据集模块的入口点。
 def build_dataset(cfg, default_args=None):
     """Build a dataset from config dict.
 
@@ -34,6 +39,8 @@ def build_dataset(cfg, default_args=None):
     Returns:
         Dataset: The constructed dataset.
     """
+    # cfg 包含数据集类型和参数的配置字典
+    # default_args是可选的默认初始化参数
     dataset = build_from_cfg(cfg, DATASETS, default_args)
     return dataset
 
@@ -75,8 +82,11 @@ def build_dataloader(dataset,
     Returns:
         DataLoader: A PyTorch dataloader.
     """
+    # 获取当前进程的rank和总进程数
+    # 支持分布式训练场景
     rank, world_size = get_dist_info()
-
+    # 如果数据集有 class_prob 属性 → 使用类别特定采样器
+    # 否则 → 使用标准分布式采样器
     if hasattr(dataset, 'class_prob') and dataset.class_prob is not None:
         sampler = ClassSpecificDistributedSampler(
             dataset,
@@ -104,10 +114,10 @@ def build_dataloader(dataset,
         batch_size=batch_size,
         sampler=sampler,
         num_workers=num_workers,
-        collate_fn=partial(collate, samples_per_gpu=videos_per_gpu),
-        pin_memory=pin_memory,
+        collate_fn=partial(collate, samples_per_gpu=videos_per_gpu),#使用MMCV的collate函数，支持批处理
+        pin_memory=pin_memory,#启用内存锁页，加速GPU数据传输
         shuffle=shuffle,
-        worker_init_fn=init_fn,
+        worker_init_fn=init_fn,#工作进程随机种子初始化
         drop_last=drop_last,
         **kwargs)
 

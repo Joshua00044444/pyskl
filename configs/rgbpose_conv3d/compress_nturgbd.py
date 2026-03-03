@@ -3,7 +3,7 @@ import os
 import subprocess
 
 from pyskl.smp import *
-
+#这是一个用于批量压缩NTU RGB+D数据集视频文件的工具脚本，主要功能是将原始AVI格式视频转换为压缩的MP4格式。
 
 def get_shape(vid):
     cmd = 'ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 \"{}\"'.format(vid)

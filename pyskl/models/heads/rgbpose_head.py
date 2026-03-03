@@ -4,7 +4,7 @@ from mmcv.cnn import normal_init
 from ..builder import HEADS
 from .base import BaseHead
 
-
+# 分类头（RGBPoseHead）
 @HEADS.register_module()
 class RGBPoseHead(BaseHead):
     """The classification head for Slowfast.

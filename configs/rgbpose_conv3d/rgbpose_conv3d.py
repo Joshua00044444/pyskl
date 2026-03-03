@@ -1,33 +1,33 @@
 # model_cfg
 backbone_cfg = dict(
-    type='RGBPoseConv3D',
-    speed_ratio=4,
-    channel_ratio=4,
-    rgb_pathway=dict(
-        num_stages=4,
+    type='RGBPoseConv3D',# 使用RGBPoseConv3D双流主干网络
+    speed_ratio=4, # 快慢路径时间维度比例
+    channel_ratio=4, # 快路径通道数缩减比例
+    rgb_pathway=dict(# RGB路径配置（慢路径）
+        num_stages=4,# 4个阶段
         lateral=True,
         lateral_infl=1,
-        lateral_activate=[0, 0, 1, 1],
-        base_channels=64,
+        lateral_activate=[0, 0, 1, 1], # 在第3、4阶段激活横向连接
+        base_channels=64,# 基础通道数64
         conv1_kernel=(1, 7, 7),
         inflate=(0, 0, 1, 1)),
-    pose_pathway=dict(
-        num_stages=3,
+    pose_pathway=dict(# 姿态路径配置（快路径）捕捉时间上的变化特征信息
+        num_stages=3,# 3个阶段（轻量化）
         stage_blocks=(4, 6, 3),
         lateral=True,
         lateral_inv=True,
         lateral_infl=16,
-        lateral_activate=(0, 1, 1),
-        in_channels=17,
-        base_channels=32,
+        lateral_activate=(0, 1, 1),# 在第2、3阶段激活横向连接
+        in_channels=17,# 17个姿态关节点
+        base_channels=32,# 基础通道数32
         out_indices=(2, ),
         conv1_kernel=(1, 7, 7),
         conv1_stride=(1, 1),
-        pool1_stride=(1, 1),
+        pool1_stride=(1, 1),  
         inflate=(0, 1, 1),
         spatial_strides=(2, 2, 2),
         temporal_strides=(1, 1, 1)))
-head_cfg = dict(
+head_cfg = dict( # 预测头配置 分类头：使用RGBPoseHead进行动作分类
     type='RGBPoseHead',
     num_classes=60,
     in_channels=[2048, 512],
@@ -48,7 +48,7 @@ right_kp=[2, 4, 6, 8, 10, 12, 14, 16]
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 train_pipeline = [
-    dict(type='MMUniformSampleFrames', clip_len=dict(RGB=8, Pose=32), num_clips=1),
+    dict(type='MMUniformSampleFrames', clip_len=dict(RGB=8, Pose=32), num_clips=1), # 同时处理RGB帧（8帧）和姿态热图（32帧）
     dict(type='MMDecode'),
     dict(type='MMCompact', hw_ratio=1., allow_imgpad=True),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
