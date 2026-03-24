@@ -8,7 +8,7 @@ from .formatting import Rename
 
 EPS = 1e-4
 
-
+# 姿态/骨架数据处理，是 GCN 模型的核心预处理模块。
 @PIPELINES.register_module()
 class PoseDecode:
     """Load and decode pose with given indices.

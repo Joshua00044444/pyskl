@@ -8,7 +8,7 @@ from torch.nn.modules.utils import _pair
 
 from ..builder import PIPELINES
 
-
+# 数据增强操作，扩充训练数据多样性。
 def _combine_quadruple(a, b):
     return (a[0] + a[2] * b[0], a[1] + a[3] * b[1], a[2] * b[2], a[3] * b[3])
 
@@ -38,13 +38,18 @@ class PoseCompact:
 
     Returns:
         type: Description of returned object.
+        将关键点坐标紧凑化，找到包围所有关节点的最小边界框，并进行裁剪。
+        找到包围所有关节点的紧凑边界框
+        按 padding 比例扩展边界框
+        可选：调整宽高比
+        更新关键点坐标和图像形状
     """
 
     def __init__(self,
-                 padding=0.25,
-                 threshold=10,
-                 hw_ratio=None,
-                 allow_imgpad=True):
+                 padding=0.25,#扩展比列
+                 threshold=10,#最小边界框阈值小于此值不执行紧凑化
+                 hw_ratio=None,# 高宽比要求，可以是单一值或范围
+                 allow_imgpad=True):#否允许边界框超出图像边界
 
         self.padding = padding
         self.threshold = threshold
@@ -58,14 +63,20 @@ class PoseCompact:
 
     def __call__(self, results):
         img_shape = results['img_shape']
-        h, w = img_shape
+        h, w = img_shape    # 获取图像形状 (h, w)
         kp = results['keypoint']
-
+        
+        #获取关键点数据，形状为 (M, T, V, C) 或 (T, V, C)
+        # M: 人数
+        # T: 帧数
+        # V: 关键点数量
+        # C: 坐标维度 (2 或 3)
+        
         # Make NaN zero
-        kp[np.isnan(kp)] = 0.
+        kp[np.isnan(kp)] = 0.#将 NaN 值设为 0
         kp_x = kp[..., 0]
-        kp_y = kp[..., 1]
-
+        kp_y = kp[..., 1]#分离 x 和 y 坐标
+        #计算紧凑边界框 找到所有有效关键点的最小/最大坐标
         min_x = np.min(kp_x[kp_x != 0], initial=np.Inf)
         min_y = np.min(kp_y[kp_y != 0], initial=np.Inf)
         max_x = np.max(kp_x[kp_x != 0], initial=-np.Inf)
@@ -78,7 +89,8 @@ class PoseCompact:
         center = ((max_x + min_x) / 2, (max_y + min_y) / 2)
         half_width = (max_x - min_x) / 2 * (1 + self.padding)
         half_height = (max_y - min_y) / 2 * (1 + self.padding)
-
+    #计算边界框中心和半宽/半高
+    # 按 padding 比例扩展
         if self.hw_ratio is not None:
             half_height = max(self.hw_ratio[0] * half_width, half_height)
             half_width = max(1 / self.hw_ratio[1] * half_height, half_width)
@@ -86,7 +98,7 @@ class PoseCompact:
         min_x, max_x = center[0] - half_width, center[0] + half_width
         min_y, max_y = center[1] - half_height, center[1] + half_height
 
-        # hot update
+        # hot update  处理边界溢出
         if not self.allow_imgpad:
             min_x, min_y = int(max(0, min_x)), int(max(0, min_y))
             max_x, max_y = int(min(w, max_x)), int(min(h, max_y))
@@ -96,10 +108,11 @@ class PoseCompact:
 
         kp_x[kp_x != 0] -= min_x
         kp_y[kp_y != 0] -= min_y
-
+        # 将关键点坐标平移到新坐标系
+        # 更新图像形状
         new_shape = (max_y - min_y, max_x - min_x)
         results['img_shape'] = new_shape
-
+        # 记录裁剪信息
         # the order is x, y, w, h (in [0, 1]), a tuple
         crop_quadruple = results.get('crop_quadruple', (0., 0., 1., 1.))
         new_crop_quadruple = (min_x / w, min_y / h, (max_x - min_x) / w,
@@ -114,8 +127,7 @@ class PoseCompact:
                     f'hw_ratio={self.hw_ratio}, '
                     f'allow_imgpad={self.allow_imgpad})')
         return repr_str
-
-
+# 标准的随机正方形裁剪，指定输出尺寸。
 @PIPELINES.register_module()
 class RandomCrop:
     """Vanilla square random crop that specifics the output size.
@@ -131,16 +143,16 @@ class RandomCrop:
         if not isinstance(size, int):
             raise TypeError(f'Size must be an int, but got {type(size)}')
         self.size = size
-
+    # 关键点坐标减去裁剪区域的左上角坐标
     @staticmethod
     def _crop_kps(kps, crop_bbox):
         return kps - crop_bbox[:2]
-
+    # 图像裁剪
     @staticmethod
     def _crop_imgs(imgs, crop_bbox):
         x1, y1, x2, y2 = crop_bbox
         return [img[y1:y2, x1:x2] for img in imgs]
-
+    # 边界框裁剪    
     @staticmethod
     def _box_crop(box, crop_bbox):
         """Crop the bounding boxes according to the crop_bbox.
@@ -160,7 +172,7 @@ class RandomCrop:
 
     def _all_box_crop(self, results, crop_bbox):
         """Crop the gt_bboxes and proposals in results according to crop_bbox.
-
+        处理所有边界框
         Args:
             results (dict): All information about the sample, which contain
                 'gt_bboxes' and 'proposals' (optional).
@@ -363,7 +375,7 @@ class RandomResizedCrop(RandomCrop):
                     f'aspect_ratio_range={self.aspect_ratio_range})')
         return repr_str
 
-
+# 图像缩放，支持保持宽高比和强制缩放两种模式
 @PIPELINES.register_module()
 class Resize:
     """Resize images to a specific size.
@@ -472,7 +484,7 @@ class Resize:
                     f'interpolation={self.interpolation})')
         return repr_str
 
-
+# 图像翻转，支持水平和垂直翻转，概率执行
 @PIPELINES.register_module()
 class Flip:
     """Flip the input images with a probability.
@@ -603,7 +615,7 @@ class Flip:
             f'flip_label_map={self.flip_label_map})')
         return repr_str
 
-
+# 图像归一化，支持 RGB 和光流两种模态
 @PIPELINES.register_module()
 class Normalize:
     """Normalize images with the given mean and std value.

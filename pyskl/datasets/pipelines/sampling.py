@@ -5,7 +5,6 @@ import numpy as np
 from pyskl.utils import warning_r0
 from ..builder import PIPELINES
 
-
 @PIPELINES.register_module()
 class UniformSampleFrames:
     """Uniformly sample frames from the video.

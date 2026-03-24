@@ -15,7 +15,7 @@ from pyskl.datasets.pipelines import Compose
 from pyskl.models import build_recognizer
 from pyskl.utils import cache_checkpoint
 
-
+# 初始化 动作识别器 模型
 def init_recognizer(config, checkpoint=None, device='cuda:0', **kwargs):
     """Initialize a recognizer from config file.
 
@@ -30,6 +30,7 @@ def init_recognizer(config, checkpoint=None, device='cuda:0', **kwargs):
     Returns:
         nn.Module: The constructed recognizer.
     """
+    # 根据配置文件 & checkpoint 创建一个可用的识别器模型。
     if 'use_frames' in kwargs:
         warnings.warn('The argument `use_frames` is deprecated PR #1191. '
                       'Now you can use models trained with frames or videos '
@@ -48,12 +49,13 @@ def init_recognizer(config, checkpoint=None, device='cuda:0', **kwargs):
     if checkpoint is not None:
         checkpoint = cache_checkpoint(checkpoint)
         load_checkpoint(model, checkpoint, map_location='cpu')
-    model.cfg = config
+    model.cfg = config # 把配置 cfg 挂到 model.cfg 上，后面推理会用到
     model.to(device)
     model.eval()
     return model
 
-
+# 对单个视频/骨架数据做推理，返回结果
+# 用一个已经初始化好的 model 对单个样本做推理，并返回 top-5 结果，必要时还能返回中间层特征。
 def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
     """Inference a video with the recognizer.
 
@@ -79,15 +81,15 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
         warnings.warn('The argument `use_frames` is deprecated PR #1191. '
                       'Now the label file is not needed in '
                       'inference_recognizer. ')
-
+    # 判断输入类型
     input_flag = None
     if isinstance(video, dict):
-        input_flag = 'dict'
+        input_flag = 'dict' # 已经是 pipeline 输入
     elif isinstance(video, np.ndarray):
-        assert len(video.shape) == 4, 'The shape should be T x H x W x C'
+        assert len(video.shape) == 4, 'The shape should be T x H x W x C' #形状 T x H x W x C，视频数组
         input_flag = 'array'
     elif isinstance(video, str) and video.startswith('http'):
-        input_flag = 'video'
+        input_flag = 'video'#链接   视频的文件路径 原始帧的目录
     elif isinstance(video, str) and osp.exists(video):
         if osp.isfile(video):
             input_flag = 'video'
@@ -98,19 +100,19 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
                            f'{type(video)}')
 
     if isinstance(outputs, str):
-        outputs = (outputs, )
+        outputs = (outputs, )#存在中间层的特征即可进行提取出来
     assert outputs is None or isinstance(outputs, (tuple, list))
 
     cfg = model.cfg
     device = next(model.parameters()).device  # model device
     # build the data pipeline
-    test_pipeline = cfg.data.test.pipeline
+    test_pipeline = cfg.data.test.pipeline # 根据不同的输入的里欸选哪个进行测试pipeline的匹配
     # Alter data pipelines & prepare inputs
-    if input_flag == 'dict':
+    if input_flag == 'dict': # 直接使用
         data = video
-    if input_flag == 'array':
-        modality_map = {2: 'Flow', 3: 'RGB'}
-        modality = modality_map.get(video.shape[-1])
+    if input_flag == 'array': 
+        modality_map = {2: 'Flow', 3: 'RGB'} # 定义模态映射  视频流 还是 RGB
+        modality = modality_map.get(video.shape[-1]) # 获取模态
         data = dict(
             total_frames=video.shape[0],
             label=-1,
@@ -120,10 +122,10 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
         for i in range(len(test_pipeline)):
             if 'Decode' in test_pipeline[i]['type']:
                 test_pipeline[i] = dict(type='ArrayDecode')
-    if input_flag == 'video':
+    if input_flag == 'video': #视频文件或者url
         data = dict(filename=video, label=-1, start_index=0, modality='RGB')
         if 'Init' not in test_pipeline[0]['type']:
-            test_pipeline = [dict(type='OpenCVInit')] + test_pipeline
+            test_pipeline = [dict(type='OpenCVInit')] + test_pipeline #pipeline 前面需要一个 OpenCVInit（或者替换掉原来的 Init）：
         else:
             test_pipeline[0] = dict(type='OpenCVInit')
         for i in range(len(test_pipeline)):
@@ -145,7 +147,7 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
         total_frames = len(
             list(
                 filter(lambda x: re.match(pattern, x) is not None,
-                       os.listdir(video))))
+                       os.listdir(video))))#统计目录下帧数
         data = dict(
             frame_dir=video,
             total_frames=total_frames,
@@ -158,7 +160,7 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
         for i in range(len(test_pipeline)):
             if 'Decode' in test_pipeline[i]['type']:
                 test_pipeline[i] = dict(type='RawFrameDecode')
-
+    # 串 pipeline、送入模型
     test_pipeline = Compose(test_pipeline)
     data = test_pipeline(data)
     data = collate([data], samples_per_gpu=1)
@@ -167,12 +169,12 @@ def inference_recognizer(model, video, outputs=None, as_tensor=True, **kwargs):
         # scatter to specified GPU
         data = scatter(data, [device])[0]
 
-    # forward the model
+    # forward the model 前向推理并抓取特征
     with OutputHook(model, outputs=outputs, as_tensor=as_tensor) as h:
         with torch.no_grad():
             scores = model(return_loss=False, **data)[0]
         returned_features = h.layer_outputs if outputs else None
-
+    # 计算top -5 结果
     num_classes = scores.shape[-1]
     score_tuples = tuple(zip(range(num_classes), scores))
     score_sorted = sorted(score_tuples, key=itemgetter(1), reverse=True)

@@ -69,11 +69,11 @@ def train_model(model,
         meta (dict | None): Meta dict to record some important information.
             Default: None
     """
-    logger = get_root_logger(log_level=cfg.get('log_level', 'INFO'))
+    logger = get_root_logger(log_level=cfg.get('log_level', 'INFO'))# 获取日志记录器
 
     # prepare data loaders
-    dataset = dataset if isinstance(dataset, (list, tuple)) else [dataset]
-
+    dataset = dataset if isinstance(dataset, (list, tuple)) else [dataset]# 确保 dataset 是列表或元组
+    # 构建 dataloader 参数：
     dataloader_setting = dict(
         videos_per_gpu=cfg.data.get('videos_per_gpu', 1),
         workers_per_gpu=cfg.data.get('workers_per_gpu', 1),
@@ -83,7 +83,7 @@ def train_model(model,
                               **cfg.data.get('train_dataloader', {}))
 
     data_loaders = [
-        build_dataloader(ds, **dataloader_setting) for ds in dataset
+        build_dataloader(ds, **dataloader_setting) for ds in dataset# 构建数据加载器
     ]
 
     # put model on gpus
@@ -94,8 +94,10 @@ def train_model(model,
         model.cuda(),
         device_ids=[torch.cuda.current_device()],
         broadcast_buffers=False,
-        find_unused_parameters=find_unused_parameters)
-
+        find_unused_parameters=find_unused_parameters)# 可以在一些复杂结构中避免因未用参数导致的 DDP 错误
+    
+    # 构建 Runner 和优化器
+    
     # build runner
     optimizer = build_optimizer(model, cfg.optimizer)
 
@@ -114,13 +116,13 @@ def train_model(model,
     else:
         optimizer_config = cfg.optimizer_config
 
-    # register hooks
+    # register hooks 保存最佳检查点和日志配置
     runner.register_training_hooks(cfg.lr_config, optimizer_config,
                                    cfg.checkpoint_config, cfg.log_config,
                                    cfg.get('momentum_config', None))
     runner.register_hook(DistSamplerSeedHook())
 
-    eval_hook = None
+    eval_hook = None #有验证集的话
     if validate:
         eval_cfg = cfg.get('evaluation', {})
         val_dataset = build_dataset(cfg.data.val, dict(test_mode=True))
@@ -140,12 +142,12 @@ def train_model(model,
     elif cfg.get('load_from', None):
         cfg.load_from = cache_checkpoint(cfg.load_from)
         runner.load_checkpoint(cfg.load_from)
-
+    # 正式训练
     runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
 
     dist.barrier()
     time.sleep(2)
-
+    # 保存最佳模型
     if test['test_last'] or test['test_best']:
         best_ckpt_path = None
         if test['test_best']:

@@ -133,10 +133,11 @@ class RGBPoseConv3D(nn.Module):
         x_pose = self.pose_path.layer1(x_pose)
         
         # 多层横向融合: 在不同阶段交换和融合两种模态的特征
+        
         # RGB 接收 Pose 特征（第一次横向连接）
         # 检查 RGB 通路是否有 layer2_lateral 模块
-        
         if hasattr(self.rgb_path, 'layer2_lateral'):
+            # 根据 rgb_detach 决定是否分离梯度
             feat = x_pose.detach() if self.rgb_detach else x_pose
             # 通过横向连接模块转换 Pose 特征
             x_pose_lateral = self.rgb_path.layer2_lateral(feat)
@@ -146,16 +147,21 @@ class RGBPoseConv3D(nn.Module):
         # 姿态通路接收 RGB 特征（第一次横向连接）
         # 检查姿态通路是否有 layer1_lateral 模块
         if hasattr(self.pose_path, 'layer1_lateral'):
+            # 根据 pose_detach 决定是否分离梯度
             feat = x_rgb.detach() if self.pose_detach else x_rgb
+            # 通过横向连接模块转换 RGB 特征
             x_rgb_lateral = self.pose_path.layer1_lateral(feat)
+            # 如果触发 DropPath，置零
             if pose_drop_path:
                 x_rgb_lateral = x_rgb_lateral.new_zeros(x_rgb_lateral.shape)
 
         # 检查 RGB 通路是否有 layer2_lateral 模块
         if hasattr(self.rgb_path, 'layer2_lateral'):
+            # 将转换后的 Pose 特征拼接到 RGB 特征（dim=1 表示通道维度）
             x_rgb = torch.cat((x_rgb, x_pose_lateral), dim=1)
         # 检查姿态通路是否有 layer1_lateral 模块
         if hasattr(self.pose_path, 'layer1_lateral'):
+            # 将转换后的 RGB 特征拼接到 Pose 特征
             x_pose = torch.cat((x_pose, x_rgb_lateral), dim=1)
             x_rgb = self.rgb_path.layer3(x_rgb)
         x_pose = self.pose_path.layer2(x_pose)

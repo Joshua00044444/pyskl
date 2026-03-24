@@ -4,8 +4,9 @@ import numpy as np
 from ..builder import PIPELINES
 
 EPS = 1e-3
-
-
+# 热力图生成与处理，用于 PoseC3D 等基于热力图的方法
+# 核心热力图生成器，基于高斯分布将关键点坐标转换为热力
+# 这个设计允许灵活地从原始关键点生成各种形式的热力图表示，用于不同的动作识别网络输入。
 @PIPELINES.register_module()
 class GeneratePoseTarget:
     """Generate pseudo heatmaps based on joint coordinates and confidence.
@@ -42,14 +43,14 @@ class GeneratePoseTarget:
     """
 
     def __init__(self,
-                 sigma=0.6,
-                 use_score=True,
-                 with_kp=True,
-                 with_limb=False,
+                 sigma=0.6,# 高斯核的标准差，控制热力图的扩散范围
+                 use_score=True,# 是否使用关键点的置信度作为高斯核的最大值
+                 with_kp=True,# 是否生成关键点的热力图
+                 with_limb=False,# 是否生成肢体的热力图
                  skeletons=((0, 1), (0, 2), (1, 3), (2, 4), (0, 5), (5, 7),
                             (7, 9), (0, 6), (6, 8), (8, 10), (5, 11), (11, 13),
-                            (13, 15), (6, 12), (12, 14), (14, 16), (11, 12)),
-                 double=False,
+                            (13, 15), (6, 12), (12, 14), (14, 16), (11, 12)),   #骨架连接定义  
+                 double=False,# 是否生成翻转的热力图 数据增强的效果
                  left_kp=(1, 3, 5, 7, 9, 11, 13, 15),
                  right_kp=(2, 4, 6, 8, 10, 12, 14, 16),
                  left_limb=(0, 2, 4, 5, 6, 10, 11, 12),
@@ -69,7 +70,7 @@ class GeneratePoseTarget:
         self.left_limb = left_limb
         self.right_limb = right_limb
         self.scaling = scaling
-
+        #生成单个关键点的热力图
     def generate_a_heatmap(self, arr, centers, max_values):
         """Generate pseudo heatmap for one keypoint in one frame.
 
@@ -105,7 +106,16 @@ class GeneratePoseTarget:
             patch = np.exp(-((x - mu_x)**2 + (y - mu_y)**2) / 2 / sigma**2)
             patch = patch * max_value
             arr[st_y:ed_y, st_x:ed_x] = np.maximum(arr[st_y:ed_y, st_x:ed_x], patch)
-
+        # 生成肢体热力图  为肢体（两个关键点之间的连接）生成热力图  
+        # arr: 热力图存储数组  starts: 肢体起始关键点坐标  
+        # ends: 肢体结束关键点坐标 
+        # start_values: 起始关键点置信度  
+        # end_values: 结束关键点置信度
+        # 计算点到线段的最短距离
+        # 使用投影法确定点到线段的距离：
+        # 如果投影在线段外，使用到端点的距离
+        # 如果投影在线段内，使用到线段的垂直距离
+        # 基于距离生成高斯热力图
     def generate_a_limb_heatmap(self, arr, starts, ends, start_values, end_values):
         """Generate pseudo heatmap for one limb in one frame.
 
@@ -175,7 +185,8 @@ class GeneratePoseTarget:
             patch = patch * value_coeff
 
             arr[min_y:max_y, min_x:max_x] = np.maximum(arr[min_y:max_y, min_x:max_x], patch)
-
+            
+        # 整合生成热力图
     def generate_heatmap(self, arr, kps, max_values):
         """Generate pseudo heatmap for all keypoints and limbs in one frame (if
         needed).
@@ -188,12 +199,13 @@ class GeneratePoseTarget:
         Returns:
             np.ndarray: The generated pseudo heatmap.
         """
-
+        # 为一帧中的所有关键点/肢体生成热力图
+        #关键点 遍历
         if self.with_kp:
             num_kp = kps.shape[1]
             for i in range(num_kp):
                 self.generate_a_heatmap(arr[i], kps[:, i], max_values[:, i])
-
+        # 肢体 遍历
         if self.with_limb:
             for i, limb in enumerate(self.skeletons):
                 start_idx, end_idx = limb
@@ -279,7 +291,7 @@ class GeneratePoseTarget:
 # N is #clips x #crops, K is num_kpt
 @PIPELINES.register_module()
 class Heatmap2Potion:
-
+    """这个类将时序热力图转换为 PoTion（Pose motion representation）表示。"""
     def __init__(self, C, option='full'):
         self.C = C
         self.option = option

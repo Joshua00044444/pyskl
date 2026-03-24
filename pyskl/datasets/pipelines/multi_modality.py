@@ -8,7 +8,7 @@ from .sampling import UniformSampleFrames
 
 EPS = 1e-4
 
-
+# 多模态数据处理，支持 RGB + Pose 联合训练。
 @PIPELINES.register_module()
 class MMPad:
 
@@ -17,25 +17,31 @@ class MMPad:
             hw_ratio = (hw_ratio, hw_ratio)
         self.hw_ratio = hw_ratio
         self.padding = padding
-
+    # 支持 RGB 视频和 Pose 骨架数据的联合训练
+    
+    
+    # 关键点填充
     # New shape is larger than old shape
+    # 更新关键点的坐标，为了保持关键点在新图像中的相对位置
     def _pad_kps(self, keypoint, old_shape, new_shape):
         offset_y = int((new_shape[0] - old_shape[0]) / 2)
         offset_x = int((new_shape[1] - old_shape[1]) / 2)
         offset = np.array([offset_x, offset_y], dtype=np.float32)
         keypoint[..., :2] += offset
         return keypoint
-
+    # 图像填充
     def _pad_imgs(self, imgs, old_shape, new_shape):
-        diff_y, diff_x = new_shape[0] - old_shape[0], new_shape[1] - old_shape[1]
+        diff_y, diff_x = new_shape[0] - old_shape[0], new_shape[1] - old_shape[1]#需要填充的总尺寸
         return [
             np.pad(
                 img, ((diff_y // 2, diff_y - diff_y // 2),
                       (diff_x // 2, diff_x - diff_x // 2), (0, 0)),
-                'constant',
-                constant_values=127) for img in imgs
+                'constant',#均匀分配填充量
+                constant_values=127) for img in imgs  # 使用灰色填充
         ]
-
+    # 确保图像尺寸满足模型输入要求
+    # 调整宽高比以适应特定模型（如 3D CNN 需要 16:9）
+    # 为后续裁剪操作预留空间
     def __call__(self, results):
         h, w = results['img_shape']
         h, w = h * (1 + self.padding), w * (1 + self.padding)
@@ -44,7 +50,7 @@ class MMPad:
             h = max(self.hw_ratio[0] * w, h)
             w = max(1 / self.hw_ratio[1] * h, w)
         h, w = int(h + 0.5), int(w + 0.5)
-
+        #依据适应的比列调整我们的关键点坐标与填充图像的尺寸
         if 'keypoint' in results:
             results['keypoint'] = self._pad_kps(results['keypoint'], results['img_shape'], (h, w))
 
@@ -61,23 +67,24 @@ class MMUniformSampleFrames(UniformSampleFrames):
     def __call__(self, results):
         num_frames = results['total_frames']
         modalities = []
+        # 为每个模态独立采样
         for modality, clip_len in self.clip_len.items():
             if results['test_mode']:
-                inds = self._get_test_clips(num_frames, clip_len)
+                inds = self._get_test_clips(num_frames, clip_len)# 采样逻辑分为训练模式（随机）与测试模式（固定）    
             else:
                 inds = self._get_train_clips(num_frames, clip_len)
             inds = np.mod(inds, num_frames)
-            results[f'{modality}_inds'] = inds.astype(int)
+            results[f'{modality}_inds'] = inds.astype(int)# 采样结果存入 results['RGB_inds']  或者['Pose_inds']
             modalities.append(modality)
         results['clip_len'] = self.clip_len
         results['frame_interval'] = None
         results['num_clips'] = self.num_clips
         if not isinstance(results['modality'], list):
             # should override
-            results['modality'] = modalities
+            results['modality'] = modalities# 将 results['modality'] 更新为列表形式 ['RGB', 'Pose']
         return results
 
-
+# 多模态解码器，同时解码视频帧和姿态数据。继承自三个父类：DecordInit, DecordDecode, PoseDecode。
 @PIPELINES.register_module()
 class MMDecode(DecordInit, DecordDecode, PoseDecode):
     def __init__(self, io_backend='disk', **kwargs):

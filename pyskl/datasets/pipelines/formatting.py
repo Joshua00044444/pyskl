@@ -7,7 +7,7 @@ from mmcv.parallel import DataContainer as DC
 
 from ..builder import PIPELINES
 
-
+#：数据格式化，将数据转换为模型可接受的格式。
 def to_tensor(data):
     """Convert objects of various python types to :obj:`torch.Tensor`.
 
@@ -26,7 +26,7 @@ def to_tensor(data):
         return torch.FloatTensor([data])
     raise TypeError(f'type {type(data)} cannot be converted to tensor.')
 
-
+#  将 numpy 数组转换为 PyTorch 张量
 @PIPELINES.register_module()
 class ToTensor:
     """Convert some values in results dict to `torch.Tensor` type in data

@@ -5,6 +5,11 @@ from mmcv.utils import build_from_cfg
 from ..builder import PIPELINES
 
 
+# 流水线组合器,将多个变换操作串联执行:
+
+# Compose 类:核心类,按顺序执行多个 transform
+# 支持字典配置和可调用对象两种形式
+# 是整个数据处理管道的调度中心
 @PIPELINES.register_module()
 class Compose:
     """Compose a data pipeline with a sequence of transforms.

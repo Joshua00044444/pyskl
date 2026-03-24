@@ -3,7 +3,7 @@ import functools
 import torch
 import warnings
 
-
+# 前向输出捕获工具：OutputHook，用于从网络的某些中间层拿 feature（在 apis/inference.py 里已经用到
 class OutputHook:
     """Output feature map of some layers.
 

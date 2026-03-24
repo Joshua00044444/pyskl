@@ -8,7 +8,7 @@ from .base import BaseHead
 @HEADS.register_module()
 class RGBPoseHead(BaseHead):
     """The classification head for Slowfast.
-
+    RGB 和 Pose 分别经过自己的 Dropout 和全连接层。
     Args:
         num_classes (int): Number of classes to be classified.
         in_channels (tuple[int]): Number of channels in input feature.

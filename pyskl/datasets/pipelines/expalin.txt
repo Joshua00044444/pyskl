@@ -1,0 +1,23 @@
+原始数据
+    ↓
+[loading.py] 加载视频帧 / [pose_related.py] 加载关键点
+    ↓
+[sampling.py] 采样帧索引
+    ↓
+[augmentations.py] 数据增强（裁剪、翻转、缩放）
+    ↓
+[heatmap_related.py] 生成热力图（可选）
+    ↓
+[formatting.py] 格式化为 Tensor
+    ↓
+模型输入
+
+
+compose.py (基础)
+    ├── loading.py (视频加载)
+    ├── sampling.py (帧采样)
+    ├── augmentations.py (数据增强)
+    ├── pose_related.py (姿态处理)
+    ├── heatmap_related.py (热力图)
+    ├── multi_modality.py (多模态，依赖 loading + pose_related)
+    └── formatting.py (格式化输出)

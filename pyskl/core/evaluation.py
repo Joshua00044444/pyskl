@@ -2,7 +2,8 @@
 import numpy as np
 from mmcv.runner import DistEvalHook as BasicDistEvalHook
 
-
+# 训练过程中的评估 Hook：比如在分布式训练时，按照一定间隔跑验证集、保存最优模型（DistEvalHook）
+# 各类评测指标/工具函数：如混淆矩阵、mean class accuracy、top-k accuracy、多标签 mAP 等
 class DistEvalHook(BasicDistEvalHook):
     greater_keys = [
         'acc', 'top', 'AR@', 'auc', 'precision', 'mAP@', 'Recall@'
