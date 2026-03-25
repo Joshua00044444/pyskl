@@ -1,0 +1,27 @@
+conda create -n pyskl python=3.10 -y
+pip uninstall torch torchvision torchaudio mmcv-full -y
+pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu121
+pip install mmcv-full==1.5.0 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html
+pip install decord fvcore matplotlib mmdet==2.23.0 mmpose==0.24.0 moviepy numpy opencv-contrib-python opencv-python pymemcache scipy tqdm
+
+
+
+## 报错 1：`mmcv-full==1.5.0` 没有预编译 wheel
+
+openmmlab 没有 cu121/torch2.1 对应的 1.5.0 wheel，只能从源码编译但失败了。**改用 1.7.2**（有预编译 wheel）：
+
+
+pip install mmcv-full==1.7.2 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html
+
+
+## 报错 2：`chumpy` 编译失败
+
+`chumpy` 是个老包，setup.py 依赖 `pip` 模块，与新版 pip 的构建隔离机制不兼容。加 `--no-build-isolation` 绕过：
+
+```bash
+pip install chumpy --no-build-isolation
+```
+
+## 完整修复命令
+pip install mmcv-full==1.7.2 -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html
+pip install chumpy --no-build-isolation
