@@ -10,6 +10,7 @@ EPS = 1e-4
 
 # 姿态/骨架数据处理，是 GCN 模型的核心预处理模块。
 @PIPELINES.register_module()
+# 根据帧索引从骨骼点数据中提取对应的帧。
 class PoseDecode:
     """Load and decode pose with given indices.
 

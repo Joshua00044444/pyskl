@@ -4,9 +4,10 @@ import numpy as np
 
 from pyskl.utils import warning_r0
 from ..builder import PIPELINES
-
+# 视频帧采样策略，是动作识别数据管道的核心组件，定义了多种帧采样方法以适应不同训练和测试场景。
 @PIPELINES.register_module()
 class UniformSampleFrames:
+    # 均匀采样视频帧，将视频分成 clip_len 个等长片段，从每个片段随机采样一帧。
     """Uniformly sample frames from the video.
 
     To sample an n-frame clip from the video. UniformSampleFrames basically
@@ -23,11 +24,11 @@ class UniformSampleFrames:
         num_clips (int): Number of clips to be sampled. Default: 1.
         seed (int): The random seed used during test time. Default: 255.
     """
-
+# clip 片段 的含义
     def __init__(self,
-                 clip_len,
-                 num_clips=1,
-                 p_interval=1,
+                 clip_len,# 每个输出 clip 的帧数
+                 num_clips=1, # 要采样的 clip 数量，默认为 1
+                 p_interval=1,# 时间间隔比例范围，控制采样长度，默认为 (1, 1)
                  seed=255,
                  **deprecated_kwargs):
 
@@ -41,7 +42,7 @@ class UniformSampleFrames:
             warning_r0('[UniformSampleFrames] The following args has been deprecated: ')
             for k, v in deprecated_kwargs.items():
                 warning_r0(f'Arg name: {k}; Arg value: {v}')
-
+        # 训练时的均匀采样逻辑
     def _get_train_clips(self, num_frames, clip_len):
         """Uniformly sample indices for training clips.
 
@@ -56,10 +57,11 @@ class UniformSampleFrames:
             ratio = np.random.rand() * (pi[1] - pi[0]) + pi[0]
             num_frames = int(ratio * num_frames)
             off = np.random.randint(old_num_frames - num_frames + 1)
-
+            # 情况1: 视频帧数 < clip_len，需要重复帧
             if num_frames < clip_len:
                 start = np.random.randint(0, num_frames)
                 inds = np.arange(start, start + clip_len)
+            # 情况2: clip_len <= 帧数 < 2*clip_len  采用扩展采样策略，部分帧重复
             elif clip_len <= num_frames < 2 * clip_len:
                 basic = np.arange(clip_len)
                 inds = np.random.choice(
@@ -69,6 +71,8 @@ class UniformSampleFrames:
                 offset = np.cumsum(offset)
                 inds = basic + offset[:-1]
             else:
+                # 情况3: 帧数 >= 2*clip_len
+                # 标准均匀采样：将视频分成 clip_len 个片段，每段随机取一帧
                 bids = np.array(
                     [i * num_frames // clip_len for i in range(clip_len + 1)])
                 bsize = np.diff(bids)
@@ -174,7 +178,7 @@ class UniformSampleFrames:
 class UniformSample(UniformSampleFrames):
     pass
 
-
+# 直接对骨骼点数组进行采样并返回解码后的数据，不同于 UniformSampleFrames 只返回索引。
 @PIPELINES.register_module()
 class UniformSampleDecode:
 
@@ -188,9 +192,9 @@ class UniformSampleDecode:
 
     # will directly return the decoded clips
     def _get_clips(self, full_kp, clip_len):
-        M, T, V, C = full_kp.shape
+        M, T, V, C = full_kp.shape# (人数, 时间, 关键点, 坐标)
         clips = []
-
+    # 采样逻辑与 UniformSampleFrames 类似
         for clip_idx in range(self.num_clips):
             pi = self.p_interval
             ratio = np.random.rand() * (pi[1] - pi[0]) + pi[0]
